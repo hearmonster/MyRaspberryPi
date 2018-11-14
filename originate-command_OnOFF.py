@@ -9,7 +9,7 @@ config_my_deviceID = '4'
 config_my_sensorID = '7'
 config_SetLED_command_capabilityID = '1c156fc1-be0e-4a5a-bf01-2326eef77e9e'
 config_CommandName = "OnOff"  #(a Property of the Capability")
-config_CommandValue = "True"
+config_CommandValue = "False"
 
 request_url='https://' + config_instance + '/iot/core/api/v1/devices/' + config_my_deviceID + '/commands'
 headers={'Content-Type' : 'application/json'}
