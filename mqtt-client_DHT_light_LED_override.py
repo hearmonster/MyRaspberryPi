@@ -3,40 +3,45 @@
 # Connects to my Canary instance 
 #    (Note: MQTT uses "AltID" values,   RESTful API uses "ID" values)
 #    Device:
-#             "My Raspberry Pi"  ID: 4   AltID: "694b3a57781cad0e" 
+#             "My Raspberry Pi"  ID: 4   AltID: "694b3a57781cad0e"
 #    Sensors:
-#             "My Raspberry Pi - Analog Light Sensor"  [Measure] Sensor AltID "e1a42e1a61e3a5ae"  
+#             "My Raspberry Pi - Analog Light Sensor"  [Measure] Sensor AltID "e1a42e1a61e3a5ae"
 #             "My Raspberry Pi - DHT Sensor"           [Measure] Sensor AltID "cbfdb4c7055403cb"
 #             "My Raspberry Pi - RedLED"               [Command] Sensor ID/AltID <not used>
 #             "SampleDuration"                         [Command] Sensor ID/AltID <not used>
 #    Capabilities:
 #             ("My Raspberry Pi - Analog Light Sensor")  "GetLight"                  [Measure] Capability AltID "e9df11f2c54275f4"
-#								Property: "sample" [Integer]
+#                                                               Property: "sample" [Integer]
 #             ("My Raspberry Pi - DHT Sensor")           "GetTemperatureAndHumidity" [Measure] Capability AltID "fb48689a05fdba88"
-#								Property: "temperature" [Float]
-#								Property: "humidity"    [Float]
+#                                                               Property: "temperature" [Float]
+#                                                               Property: "humidity"    [Float]
 #             ("My Raspberry Pi - Red LED")              "SetLED"                    [Command] Capability AltID <not used here>
-#								Property: "OnOff" [Boolean] (state)
+#                                                               Property: "OnOff" [Boolean] (state)
 #             ("SampleDuration")                         "SetSampleDuration"         [Command] Capability AltID <not used here>
-#								Property: "sampleDuration" [Integer] (seconds)
+#                                                               Property: "sampleDuration" [Integer] (seconds)
+
 #
 # Configurable logging implemented (writes to std out. Separate log file output possible, but commented out)
 #
 # Captures DHT and Light (with a two second delay between the two samples to workaround locking the I/O bus)
+#   * Pressing the button while the DHT samples are being read, will invoke an override that will
+#     increase the temperature by one degree each cycle
+#   * Releasing the button will gradually reduce the temp value back to it's true value
+#     (the override will decrease by 1 each cycle, until it returns back to zero - it won't go below zero)
 #
 # The initial state of the LED is lit, although it is configurable - see "Commands" below.
 #
 # Accepts Commands - parses out the command and payload
-#	to toggle the LED - command: "OnOff", 
-#		* accepts TRUE/FALSE (case insenstive)
+#       to toggle the LED - command: "OnOff",
+#               * accepts TRUE/FALSE (case insenstive)
 #                 fully implemented example illustrated by running the 'originate-command_OnOFF.py' script
-#	to reset the sample duration - command "sampleDuration"
-#		* accepts INT (seconds) either wrapped in quotes or not
-#		* interupts the current wait immediately, 
-#		  (implemented using Python Events and OS Signal Interupts)
+#       to reset the sample duration - command "sampleDuration"
+#               * accepts INT (seconds) either wrapped in quotes or not
+#               * interupts the current wait immediately,
+#                 (implemented using Python Events and OS Signal Interupts)
 #                 fully implemented example illustrated by running the 'originate-command_sampleDuration.py' script
 #
-# Shuts down gracefully: 
+# Shuts down gracefully:
 #   * disconnects from MQTT Broker
 #   * Turns off the LED
 #
@@ -46,7 +51,7 @@ config_broker_url='2f7241c1-8671-4591-9de0-8c64ed90e10e.canary.cp.iot.sap'
 config_broker_port=8883
 config_alternate_id_device='694b3a57781cad0e'      #declares Broker TOPIC.  ie 'GrovePi'
 config_crt_4_landscape='./canary_cp_iot_sap_BUNDLE.crt'
-config_sleep_time=20	#1800    #30 mins between samples
+config_sleep_time=10	#Sample Rate (in seconds).  e.g. 1800 => 30 mins between samples
 config_credentials_key='./credentials.key'
 config_credentials_crt='./credentials.crt'
 
@@ -76,9 +81,13 @@ iLightSensorPort = 1   #A1 (Analog)
 #logging.basicConfig( filename = 'mqtt-client.log', level=logging.DEBUG )  #DEBUG, INFO, WARNING
 logging.basicConfig( level=logging.INFO )  #DEBUG, INFO, WARNING
 iLEdPort = 4            #D4 (Digital)
+iButtonPort = 8         #D8 (Digital)
+iOverride = 0
 
 # ========================================================================
 def setLed( sOnOff_command_argument ):
+	# Note: Takes a STRING (not a BOOL!) as an argument
+
 	logging.info( 'sOnOff_command_argument: ' + sOnOff_command_argument)
 	#Advice is to never attempt a cast to Bool in python!  
 	#	https://stackoverflow.com/questions/715417/converting-from-a-string-to-boolean-in-python
@@ -88,7 +97,7 @@ def setLed( sOnOff_command_argument ):
 	#Toggle LED on Port D4
 	#client.bLEdState = not client.bLEdState
 	grovepi.digitalWrite( iLEdPort, client.bLEdState )
-	logging.info( "Port: " + str( iLEdPort ) + "\tState: " + str( client.bLEdState ) + "\n" )
+	logging.info( "LED Port: " + str( iLEdPort ) + "\tState: " + str( client.bLEdState ) + "\n" )
 
 
 def on_connect_brokerHandler(client, userdata, flags, rc):
@@ -127,7 +136,10 @@ def on_messageHandler(client, obj, msg):
 def getDhtReadings():
 	logging.info( "Obtaining Temperature and Humidity readings..." )
 	[ iTemp, iHumidity ] = grovepi.dht( iDHtSensorPort, 0 )
-	logging.info( "Temp: " + str( iTemp ) + "C\tHumidity: " + str( iHumidity ) + "%" )
+	logging.info( "Temp reading: " + str( iTemp ) + "C\tHumidity reading: " + str( iHumidity ) + "%" )
+	iTemp = iTemp + client.iOverride  #always safe to add it whether it's zero or non-zero
+	if client.iOverride > 0:
+		logging.info( "Override invoked. Current Override value: " + str( client.iOverride ) + "\tNew temp value: " + str( iTemp) )
 	sPayload='{ "capabilityAlternateId": "fb48689a05fdba88", "sensorAlternateId": "cbfdb4c7055403cb", "measures": [{"temperature": "' + str(iTemp) + '" },{"humidity": "' + str(iHumidity) + '" }] }'
 	logging.debug( "published for capability >>>GetTemperatureAndHumidity<<<  payload: " + sPayload )
 	return sPayload
@@ -140,6 +152,19 @@ def getLightReading():
 	sResult=client.publish(my_publish_topic, sPayload, qos=0)
 	logging.debug( "published for capability >>>GetLight<<<  payload: " + sPayload )
 	return sPayload
+
+def calculateOverride():
+	isButtonPressed = grovepi.digitalRead( iButtonPort )
+	if isButtonPressed:
+		client.iOverride = client.iOverride + 1
+		logging.info( "Button depressed current state: TRUE   Override has increased to: " + str( client.iOverride ) + "\n" )
+	else:
+		logging.debug( "Button depressed current state: FALSE" )
+		if  client.iOverride == 0:
+			logging.debug( "Override value cannot fall below zero")
+		else:
+			client.iOverride = client.iOverride - 1
+			logging.info( "Override value invoked but decreased to: " + str( client.iOverride ) + "\n" )
 
 def isTrue( s ):
 	#Assumes 's' is any case:
@@ -164,6 +189,7 @@ client.bConnectedFlag=False   #Custom property
 client.bLEdState = True
 client.iSleepTime = config_sleep_time
 client.continueLoop = True
+client.iOverride = iOverride
 
 # Set LED to its initial state
 logging.info( "LED Initial State:: Port: " + str( iLEdPort ) + "\tState: " + str( client.bLEdState ) + "\n" )
@@ -205,11 +231,13 @@ def main():
 			logging.info('in main loop, sample duration set for ' + str( client.iSleepTime) + ' seconds\n' )
 
 			try:
+				calculateOverride()
+
 				sPayload = getDhtReadings()
 				sResult=client.publish(my_publish_topic, sPayload, qos=0)
 				logging.info("result of publish for capability >>>GetTemperatureAndHumidity<<<  : " + str(sResult) + "\n")
 
-				time.sleep(5)   # delay workaround for Bug:  https://forum.dexterindustries.com/t/dht-sensor-vs-light-sensor/904/2
+				time.sleep(2)   # delay workaround for Bug:  https://forum.dexterindustries.com/t/dht-sensor-vs-light-sensor/904/2
 
 				sPayload = getLightReading()
 				sResult=client.publish(my_publish_topic, sPayload, qos=0)
@@ -220,28 +248,27 @@ def main():
 
 			#time.sleep( client.iSleepTime )
 			exit.wait( client.iSleepTime )
-        #Clean up...
-        logging.info( 'All done!' )
-        client.loop_stop()    #Stop loop
-        client.disconnect() # disconnect
-        setLed( 'FALSE' )
+	#Clean up...
+	logging.info( 'All done!' )
+	client.loop_stop()    #Stop loop 
+	client.disconnect() # disconnect
+	setLed( 'FALSE' )
 
 # These two listeners will handle the Sample Duration reset and the "real" events (such as keyboard ^C)
 def on_sampleRateHandler(signo, _frame):
-        # Ironically enough, this doesn't appear to *do* anything! But it actually *does*, but only subtly...
-        # The 'exit.set()' below will trigger an immediate exit from the loop
-        # The loop will see the 'client.continueLoop' property continues to be True and will rerun the loop...but with a new sleep time!
-        # Ultimately, I get a premature exit from this sleep cycle and the loop restarts *immediately*...but with a new sleep time!
+	# Ironically enough, this doesn't appear to *do* anything! But it actually *does*, but only subtly...
+	# The 'exit.set()' below will trigger an immediate exit from the loop
+	# The loop will see the 'client.continueLoop' property continues to be True and will rerun the loop...but with a new sleep time!
+	# Ultimately, I get a premature exit from this sleep cycle and the loop restarts *immediately*...but with a new sleep time!
 	logging.warning("SIGUSR1 gentle reset...\n" )
 	# client.continueLoop continues to be true
 	exit.set()
 
 def on_quitHandler(signo, _frame):
-        # sets the 'client.continueLoop' property to False, then returns control back to the main() loop
-        # The 'exit.set()' below will trigger an immediate exit from the loop
-        # The loop will see the 'client.continueLoop' property has been set to False and will "refuse" to rerun the loop
-        # resulting in the clean up commands being run just before main() terminates
-        # Ultimately, I get a premature exit from this sleep cycle, no loop restart, and a clean up before the program terminates
+	# sets the 'client.continueLoop' property to False, then returns control back to the main() loop
+	# The ' exit.set()' below will trigger an immediate exit from the loop
+	# The loop will see the 'client.continueLoop' property has been set to False and will "refuse" to rerun the loop
+	# resulting in the clean up commands being run just before main() terminates
 	logging.warning("Interrupted by %d" % signo)
 	logging.warning("shutting down..." )
 	client.continueLoop = False
@@ -261,4 +288,3 @@ if __name__ == '__main__':
 		signal.signal(getattr(signal, 'SIG'+sig), on_quitHandler);
 
 	main()
-
