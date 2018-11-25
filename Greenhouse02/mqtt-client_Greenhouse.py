@@ -45,15 +45,14 @@
 from configparser import ConfigParser
 
 parser = ConfigParser()
-propFile = 'Greenhouse_02_device.properties'
+propFile = 'Greenhouse_02_Device.properties'
 parser.read( propFile )
 
 #find_sections = ['device', 'sensor', 'sensorType', 'capability']
 #print( parser.get( propFile, 'deviceId' ) )  
 
-sBrokerUrl  = parser['broker']['url'] 
-iBrokerPort = int( parser['broker']['port'] )
-print( str( iBrokerPort *2 ))
+sBrokerUrl  = parser['Landscape']['url'] 
+iBrokerPort = int( parser['Landscape']['port'] )
 
 config_DeviceAltId     = parser['device']['deviceAltId']
 config_SensorAltId     = parser['sensor']['sensorAltId']
@@ -63,10 +62,10 @@ propertyHumidity    = 'Greenhouse_humidity'
 propertyLight       = 'Greenhouse_light'
 propertyLampStatus  = 'Greenhouse_lampStatus'
 
-config_crt_4_landscape= parser['certificates']['landscapeCertBundle']
+config_crt_4_landscape= parser['Landscape']['CertBundle']
 config_sleep_time=30	#Sample Rate (in seconds).  e.g. 1800 => 30 mins between samples
-config_credentials_key = parser['certificates']['credentialsKey']
-config_credentials_crt = parser['certificates']['credentialsCert']
+config_credentials_key = parser['device']['credentialsKey']
+config_credentials_crt = parser['device']['credentialsCert']
 import logging
 config_logLevel = logging.DEBUG   #DEBUG, INFO, WARNING
 
