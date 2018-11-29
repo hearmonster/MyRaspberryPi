@@ -41,9 +41,12 @@
 #
 #
 
+import logging
+config_logLevel = logging.DEBUG   #DEBUG, INFO, WARNING
+#logging.basicConfig( filename = 'mqtt-client.log', level=logging.DEBUG )  #DEBUG, INFO, WARNING
+logging.basicConfig( level=config_logLevel )  #DEBUG, INFO, WARNING
 
 from configparser import ConfigParser
-
 parser = ConfigParser()
 propFile = 'Greenhouse_02_Device.properties'
 parser.read( propFile )
@@ -54,39 +57,27 @@ parser.read( propFile )
 sBrokerUrl  = parser['Landscape']['url'] 
 iBrokerPort = int( parser['Landscape']['port'] )
 
-config_DeviceAltId     = parser['device']['deviceAltId']
-config_SensorAltId     = parser['sensor']['sensorAltId']
-config_CapabilityAltId = parser['capability']['capabilityAltId']
+sDeviceAltId     = parser['device']['deviceAltId']
+sSensorAltId     = parser['sensor']['sensorAltId']
+sCapabilityAltId = parser['capability']['capabilityAltId']
 propertyTemp        = 'Greenhouse_temp'
 propertyHumidity    = 'Greenhouse_humidity'
 propertyLight       = 'Greenhouse_light'
 propertyLampStatus  = 'Greenhouse_lampStatus'
 
-config_crt_4_landscape= parser['Landscape']['CertBundle']
-config_sleep_time=30	#Sample Rate (in seconds).  e.g. 1800 => 30 mins between samples
-config_credentials_key = parser['device']['credentialsKey']
-config_credentials_crt = parser['device']['credentialsCert']
-import logging
-config_logLevel = logging.DEBUG   #DEBUG, INFO, WARNING
+sLandscapeCertBundleFilename= parser['Landscape']['CertBundle']
+iSleepTime=30	#Sample Rate (in seconds).  e.g. 1800 => 30 mins between samples
+sDeviceCredentialsKeyFilename = parser['device']['credentialsKey']
+sDeviceCredentialsCertFilename = parser['device']['credentialsCert']
 
-print( "url: " + sBrokerUrl )
-print( "port: " + str( iBrokerPort ) )
-print( "device: " + config_DeviceAltId )
-print( "sensor: " + config_SensorAltId )
-print( "cap: " + config_CapabilityAltId )
-print( "cert bundle: " + config_crt_4_landscape )
-print( "cred key: " + config_credentials_key )
-print( "cred cert: " + config_credentials_crt )
-
-import sys
-import os.path
-filesToFind_set = [config_crt_4_landscape, config_credentials_key, config_credentials_crt]
-for fileName in filesToFind_set:
-	if not os.path.isfile( fileName ):
-		print('Missing file: ', fileName )
-		sys.exit()
-print( "All files found, proceeding...")
-
+logging.info( "Broker URL:\t" + sBrokerUrl )
+logging.info( "Broker Port:\t " + str( iBrokerPort ) )
+logging.info( "Device Alt ID:\t " + sDeviceAltId )
+logging.info( "Sensor Alt ID:\t " + sSensorAltId )
+logging.info( "Capability Alt ID: " + sCapabilityAltId )
+logging.info( "Cert Bundle Filename: " + sLandscapeCertBundleFilename )
+logging.info( "Cred Key Filename: " + sDeviceCredentialsKeyFilename )
+logging.info( "Cred Cert Filename: " + sDeviceCredentialsCertFilename )
 
 # ========================================================================
 # imports
@@ -103,6 +94,14 @@ import paho.mqtt.client as mqtt
 
 import grovepi
 
+import sys
+import os.path
+filesToFind_set = [sLandscapeCertBundleFilename, sDeviceCredentialsKeyFilename, sDeviceCredentialsCertFilename]
+for fileName in filesToFind_set:
+	if not os.path.isfile( fileName ):
+		print('Missing file: ', fileName )
+		sys.exit()
+logging.info( "All files found, proceeding...")
 
 
 # ========================================================================
@@ -110,8 +109,6 @@ import grovepi
 
 iDHtSensorPort = 7     #D7 (Digital)
 iLightSensorPort = 1   #A1 (Analog)
-#logging.basicConfig( filename = 'mqtt-client.log', level=logging.DEBUG )  #DEBUG, INFO, WARNING
-logging.basicConfig( level=config_logLevel )  #DEBUG, INFO, WARNING
 iLEdPort = 4            #D4 (Digital)
 iButtonPort = 8         #D8 (Digital)
 iOverride = 0
@@ -120,7 +117,7 @@ iOverride = 0
 def setLed( sOnOff_command_argument ):
 	# Note: Takes a STRING (not a BOOL!) as an argument
 
-	logging.info( 'sOnOff_command_argument: ' + sOnOff_command_argument)
+	logging.debug( 'sOnOff_command_argument: ' + sOnOff_command_argument)
 	#Advice is to never attempt a cast to Bool in python!  
 	#	https://stackoverflow.com/questions/715417/converting-from-a-string-to-boolean-in-python
 
@@ -129,7 +126,7 @@ def setLed( sOnOff_command_argument ):
 	#Toggle LED on Port D4
 	#client.bLEdState = not client.bLEdState
 	grovepi.digitalWrite( iLEdPort, client.bLEdState )
-	logging.info( "LED Port: " + str( iLEdPort ) + "\tState: " + str( client.bLEdState ) + "\n" )
+	logging.info( "LED Port: " + str( iLEdPort ) + "\tNew state: " + str( client.bLEdState ) + "\n" )
 
 	if client.bLEdState == True:
 		client.sSample_LampStatus = 'ON'
@@ -171,7 +168,7 @@ def on_messageHandler(client, obj, msg):
 		logging.error( "invalid command string - no 'command' key found" )
 
 def getDhtReadings():
-	logging.info( "Obtaining Temperature and Humidity readings..." )
+	logging.debug( "Obtaining Temperature and Humidity readings..." )
 	[ fTemp, fHumidity ] = grovepi.dht( iDHtSensorPort, 0 )
 	logging.info( "Temp reading: " + str( fTemp ) + "C\tHumidity reading: " + str( fHumidity ) + "%" )
 	client.fSample_Temp = fTemp + client.iOverride  #always safe to add it whether it's zero or non-zero
@@ -181,7 +178,7 @@ def getDhtReadings():
 	logging.debug( "'client' Object settings for Temp: " + str( client.fSample_Temp ) + " and Humidity: " + str( client.fSample_Humidity ) )
                
 def getLightReading():
-	logging.info( "Obtaining Light reading..." )
+	logging.debug( "Obtaining Light reading..." )
 	iLightSensorValue = grovepi.analogRead( iLightSensorPort )
 	logging.info( "light reading: " + str( iLightSensorValue ) )
 	client.iSample_Light = iLightSensorValue
@@ -214,15 +211,15 @@ def isTrue( s ):
 
 logging.info( "Starting..." )
 
-my_device=config_DeviceAltId
+my_device=sDeviceAltId
 client=mqtt.Client(client_id=my_device, clean_session=True, userdata=None)
 client.on_connect=on_connect_brokerHandler
 client.on_subscribe=on_subscribeHandler
 client.on_message=on_messageHandler
-client.tls_set(config_crt_4_landscape, certfile=config_credentials_crt, keyfile=config_credentials_key)
+client.tls_set(sLandscapeCertBundleFilename, certfile=sDeviceCredentialsCertFilename, keyfile=sDeviceCredentialsKeyFilename)
 client.bConnectedFlag=False   #Custom property
 client.bLEdState = True
-client.iSleepTime = config_sleep_time
+client.iSleepTime = iSleepTime
 client.continueLoop = True
 client.iOverride = iOverride
 client.fSample_Temp = 0
@@ -261,7 +258,7 @@ my_subscription_topic='commands/' + my_device
 client.subscribe(my_subscription_topic, 0)
 
 client.loop_start()
-time.sleep( 10 )
+time.sleep( 5 )
 
 from threading import Event
 exit = Event()
@@ -277,10 +274,10 @@ def main():
 
 				getDhtReadings()
 
-				time.sleep(2)   # delay workaround for Bug:  https://forum.dexterindustries.com/t/dht-sensor-vs-light-sensor/904/2
+				time.sleep(1)   # delay workaround for Bug:  https://forum.dexterindustries.com/t/dht-sensor-vs-light-sensor/904/2
 
 				getLightReading()
-				sPayload='{ "capabilityAlternateId": "' + config_CapabilityAltId + '", "sensorAlternateId": "' + config_SensorAltId + '", "measures": [{"' + propertyTemp + '": "' + str( client.fSample_Temp ) + '","' + propertyHumidity + '": "' + str( client.fSample_Humidity ) + '","' + propertyLight + '": "' + str( client.iSample_Light ) + '", "' + propertyLampStatus + '": "' + str( client.sSample_LampStatus ) + '" }] }'
+				sPayload='{ "capabilityAlternateId": "' + sCapabilityAltId + '", "sensorAlternateId": "' + sSensorAltId + '", "measures": [{"' + propertyTemp + '": "' + str( client.fSample_Temp ) + '","' + propertyHumidity + '": "' + str( client.fSample_Humidity ) + '","' + propertyLight + '": "' + str( client.iSample_Light ) + '", "' + propertyLampStatus + '": "' + str( client.sSample_LampStatus ) + '" }] }'
 				logging.debug("Payload: " + str(sPayload) + "\n")
 				sResult=client.publish(my_publish_topic, sPayload, qos=0)
 				logging.info("result of publish for capability >>>greenhouse_capability<<<  : " + str(sResult) + "\n")
@@ -329,4 +326,5 @@ if __name__ == '__main__':
 	for sig in ('TERM', 'HUP', 'INT' ):
 		signal.signal(getattr(signal, 'SIG'+sig), on_quitHandler);
 
+	logging.debug( 'Starting Main...!' )
 	main()
