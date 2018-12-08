@@ -1,0 +1,262 @@
+# create an IoTS device of choice with just one program
+# and no necessary human interaction
+# write a script for credential conversion
+
+from configparser import ConfigParser
+
+config = ConfigParser()
+propFile = 'createGreenhouseArtifacts.properties'
+config.read( propFile )
+
+sBrokerUrl  = config['Landscape']['url']
+iBrokerPort = int( config['Landscape']['port'] )   #Note used, but required to be written to the Device Properties file later
+sLandscapeCertBundle  = config['Landscape']['CertBundle']
+sLandscapeUsername  = config['Landscape']['Username']
+sLandscapePassword  = config['Landscape']['Password']
+
+# Used as a prefix for the Capability, Sensor Type, Sensor (instance) & Device (instance)
+sNamesPrefix = config['Artifact Naming']['namesPrefix']
+
+# Used as a suffix for the Sensor (instance) & Device (instance)
+sInstanceSuffix = config['Artifact Naming']['instanceSuffix']
+
+
+propertyTemp        = '{ "name" : "' + sNamesPrefix + '_temp", "dataType" : "float" }'
+propertyHumidity    = '{ "name" : "' + sNamesPrefix + '_humidity", "dataType" : "float" }'
+propertyLight       = '{ "name" : "' + sNamesPrefix + '_light", "dataType" : "integer" }'
+propertyLampStatus  = '{ "name" : "' + sNamesPrefix + '_lampStatus", "dataType" : "string" }'
+capabilityProperties = propertyTemp + ', ' + propertyHumidity + ', ' + propertyLight + ', ' + propertyLampStatus
+
+
+print( 'Broker URL:         ' + sBrokerUrl )
+print( 'Broker Port:        ' + str( iBrokerPort ) + '\t(not used yet)' )
+print( 'Cert Bundle:        ' + sLandscapeCertBundle + '\t(not used yet)' )
+print( 'Landscape Username: ' + sLandscapeUsername )
+print( 'Landscape Password: ' + sLandscapePassword )
+print( 'Names Prefix:       ' + sNamesPrefix )
+print( 'Instance Suffix:    ' + sInstanceSuffix )
+
+
+
+import sys
+#sys.exit()
+import requests
+import json
+
+#capabilityName:  IoT AE is fussier than IoT Core. Take care to create Capability Names that IoT AE supports (Letters, Digits, Underscores & must start with a letter. No hyphens allowed!).  I'm also following the Things naming convention of calling it a Measures' rather than a 'Capability' (meakes more sense since there are multiple Properties in my Capability/Measures anyway)
+capabilityName =  sNamesPrefix + '_Measures'
+sensorTypeName =  sNamesPrefix + '_SensorType'
+
+# Sensor, Device and it's generated Cert file are *instances*, so include the suffix in their names...
+sensorName =  sNamesPrefix + sInstanceSuffix + '_Sensor'
+deviceName = sNamesPrefix + sInstanceSuffix + '_Device'
+
+#generatedCertFileName: This will comprise of the combined, downloaded Device Cert and it's Private Key of our newly-created Device - in PEM format
+generatedCertFileName='./' + deviceName + '-cert.pem'
+
+#opensslFilenamesBase: Example Base Name: Greenhouse_01-device-credentials  (the .key & .crt file extensions get added later)
+opensslFilenamesBase = deviceName + "-credentials"   
+
+devicePropertiesFileName='./' + deviceName + '.properties'
+
+# ======================================================================== 
+# these values are filled as you go through the steps
+gw_id_4_mqtt=''
+my_deviceId = ''
+my_deviceAltId = ''
+my_capabilityId = ''
+my_capabilityAltId = ''
+my_sensorTypeId = ''
+my_sensorTypeAltId = ''
+my_sensorId = ''
+my_sensorAltId = ''
+
+# ======================================================================== 
+# >>> createArtifact()
+# >>> Takes:   
+#	1) input payload: String
+#	2) Request URL (dependant upon artifact type): String
+# >>> Returns: result payload (containing IDs and AltIDs): ByteArray
+
+def createArtifact( sPayload, sURL ):
+	print('createArtifact::Incoming Payload: ' + payload)
+	headers={'Content-Type' : 'application/json'}
+	response=requests.post(request_url, headers=headers, auth=(sLandscapeUsername, sLandscapePassword), data=payload)
+	status_code=response.status_code
+	print('createArtifact::Status Code/response: " ' + str(status_code) + "\t" + str(response.text))
+	if (status_code == 200):
+		return response.text
+	else:
+		exit(0)
+
+
+def returnAttribute( bResponseText, sAttributeName ):
+	try:
+		json_payload = json.loads(response.text)
+		sAttributeValue = json_payload['sAttributeName']
+		print('returnAttribute::Found ' + sAttributeName + ': ' + sAttributeValue )
+	except (ValueError) as e:
+		print(e)
+
+# ======================================================================== 
+
+print('listing gateways')
+request_url='https://' + sBrokerUrl + '/iot/core/api/v1/gateways'
+headers={'Content-Type' : 'application/json'}
+response=requests.get(request_url, headers=headers, auth=(sLandscapeUsername, sLandscapePassword))
+status_code=response.status_code
+if (status_code == 200):
+	print(response.text)
+	try:
+		json_payload=json.loads(response.text)
+		for individual_dataset in json_payload:
+			print(individual_dataset['id'] + ' - ' + individual_dataset['protocolId'])
+			if ((individual_dataset['protocolId'] == 'mqtt') and (individual_dataset['status'] == 'online')):
+				gw_id_4_mqtt=individual_dataset['id']
+				print('Using gateway: ' + gw_id_4_mqtt)
+	except (ValueError) as e:
+                print(e)
+# ===
+
+print('creating the device instance: ' + deviceName )
+sRequestUrl='https://' + sBrokerUrl + '/iot/core/api/v1/devices'
+# Advanced Payload definition
+#payload='{ "gatewayId" : "' + gw_id_4_mqtt + '", "name" : "' + deviceName + '", "altId" : "' + deviceAltId + '" }'
+# Simple Payload definition
+sPayload='{ "gatewayId" : "' + gw_id_4_mqtt + '", "name" : "' + deviceName + '" }'
+
+bResponseText = createArtifact( sPayload, sRequestUrl ):
+
+my_deviceId = returnAttribute( bResponseText, 'id' ):
+my_deviceAltId = returnAttribute( bResponseText, 'alternateId' ):
+print('Returned device ID: ' + my_deviceId )
+print('Returned device AltID: ' + my_deviceAltId )
+# ===
+
+print('\nretrieving the certificate')
+request_url='https://' + sBrokerUrl + '/iot/core/api/v1/devices/' + my_deviceId + '/authentications/clientCertificate/pem'
+headers={'Content-Type' : 'application/json'}
+response=requests.get(request_url, headers=headers, auth=(sLandscapeUsername, sLandscapePassword))
+status_code=response.status_code
+print(str(status_code) + " " + str(response.text))
+if (status_code == 200):
+	try:
+		json_payload = json.loads(response.text)
+		secret = json_payload['secret']
+		pem = json_payload['pem']
+		print('Returned secret: ' + secret + '\n')
+		#print('pem: ' + pem)   #Printing out the Cert is rather messy, sending it to a file is good enough
+		certfile=open( generatedCertFileName, "w")
+		certfile.write(pem)
+		certfile.close()
+
+		pem_script=open("convert_" + deviceName + "-pem.sh", "w")
+
+		pem_script.write("echo 'Please use pass phrase " + secret + " for the certificate import from " + generatedCertFileName + " in the conversion !'\n\n")
+
+		pem_script.write("openssl rsa -in " + generatedCertFileName + " -out " + opensslFilenamesBase + ".key\n")
+		pem_script.write("openssl x509 -in " + generatedCertFileName + " -out " +  opensslFilenamesBase + ".crt\n")
+		pem_script.close()
+	except (ValueError) as e:
+                print(e)
+else:
+	exit(0)
+# ===
+
+print('\ncreating the capability:' + capabilityName)
+request_url='https://' + sBrokerUrl + '/iot/core/api/v1/capabilities'
+headers={'Content-Type' : 'application/json'}
+
+#payload='{ "name" : "' + capabilityName + '", "properties" : [ ' + capabilityProperties + ' ], "altId" : "' + capabilityAltId + '" }'
+payload='{ "name" : "' + capabilityName + '", "properties" : [ ' + capabilityProperties + ' ] }'
+print(payload)
+response=requests.post(request_url, headers=headers, auth=(sLandscapeUsername, sLandscapePassword), data=payload)
+status_code=response.status_code
+print(str(status_code) + " " + str(response.text))
+if (status_code == 200):
+	try:
+		json_payload = json.loads(response.text)
+		my_capabilityId = json_payload['id']
+		print('Returned capability ID: ' + my_capabilityId )
+		my_capabilityAltId = json_payload['alternateId']
+		print('Returned capability AltID: ' + my_capabilityAltId )
+	except (ValueError) as e:
+                print(e)
+else:
+	exit(0)
+# ===
+
+
+print('\ncreating the sensortype: ' + sensorTypeName )
+request_url='https://' + sBrokerUrl + '/iot/core/api/v1/sensorTypes'
+headers={'Content-Type' : 'application/json'}
+payload='{ "name" : "' + sensorTypeName + '", "capabilities" : [ { "id" : "' + my_capabilityId + '", "type" : "measure" } ] }'
+print(payload)
+response=requests.post(request_url, headers=headers, auth=(sLandscapeUsername, sLandscapePassword), data=payload)
+status_code=response.status_code
+print(str(status_code) + " " + str(response.text))
+if (status_code == 200):
+	try:
+		json_payload=json.loads(response.text)
+		my_sensorTypeId = json_payload['id']
+		print('Returned sensorType ID: ' + my_sensorTypeId )
+		my_sensorTypeAltId = json_payload['alternateId']
+		print('Returned sensorType AltID: ' + my_sensorTypeAltId )
+	except (ValueError) as e:
+                print(e)
+else:
+	exit(0)
+# ===
+
+print('\ncreating the sensor instance: ' + sensorName )
+request_url='https://' + sBrokerUrl + '/iot/core/api/v1/sensors'
+headers={'Content-Type' : 'application/json'}
+#payload='{ "name": "' + sensorName + '", "deviceId" : "' + my_deviceId + '", "sensorTypeId" : "' + my_sensorTypeId + '", "altId" : "' + sensorAltId + '" }'
+payload='{ "name": "' + sensorName + '", "deviceId" : "' + my_deviceId + '", "sensorTypeId" : "' + my_sensorTypeId + '" }'
+print(payload)
+response=requests.post(request_url, headers=headers, auth=(sLandscapeUsername, sLandscapePassword), data=payload)
+status_code=response.status_code
+print(str(status_code) + " " + str(response.text))
+if (status_code == 200):
+	try:
+		json_payload = json.loads(response.text)
+		my_sensorId = json_payload['id']
+		print('Returned sensor ID: ' + my_sensorId )
+		my_sensorAltId = json_payload['alternateId']
+		print('Returned sensor AltID: ' + my_sensorAltId )
+	except (ValueError) as e:
+                print(e)
+else:
+	exit(0)
+# ===
+
+
+print('=== summary ===')
+print('Device Name:\t\t'   + deviceName     + '\t AltID: ' + str(my_deviceAltId)     + '\t Id: ' + str(my_deviceId))
+print('Sensor Name:\t\t'   + sensorName     + '\t AltID: ' + str(my_sensorAltId)     + '\t Id: ' + str(my_sensorId))
+print('SensorType Name:\t' + sensorTypeName + '\t AltID: ' + str(my_sensorTypeAltId) + '\t Id: ' + str(my_sensorTypeId))
+print('Capability Name:\t' + capabilityName + '\t AltID: ' + str(my_capabilityAltId) + '\t Id: ' + str(my_capabilityId))
+print('downloaded Device Certificate/Key file: ' + generatedCertFileName )
+print('secret for downloaded Device Certificate/Key: ' + secret )
+print('Device Certificate file (will be): ' + opensslFilenamesBase + '.crt' )
+print('Device Key file (will be): ' + opensslFilenamesBase + '.key' )
+#print('=== summary ===')
+
+print('=== writing properties file: ' + devicePropertiesFileName + '\t ===')
+config['device'] = { 'deviceName': deviceName, 'deviceId': my_deviceId, 'deviceAltId': my_deviceAltId, 'keyPair': generatedCertFileName, 'secret': secret, 'credentialsKey': opensslFilenamesBase + ".key", 'credentialsCert': opensslFilenamesBase + ".crt" }
+config['sensor'] = { 'sensorName': sensorName, 'sensorId': my_sensorId, 'sensorAltId': my_sensorAltId }
+config['sensorType'] = { 'sensorTypeName': sensorTypeName, 'sensorTypeId': my_sensorTypeId, 'sensorTypeAltId': my_sensorTypeAltId }
+config['capability'] = { 'capabilityName': capabilityName, 'capabilityId': my_capabilityId, 'capabilityAltId': my_capabilityAltId }
+
+
+
+sPayloadTemplate = '{ "capabilityAlternateId": "' + my_capabilityAltId + '", "sensorAlternateId": "' + my_sensorAltId + '", "measures": [{"' + sNamesPrefix + '_temp": ">>>_TEMP_<<<","' + sNamesPrefix + '_humidity": ">>>_HUMIDITY_<<<","' + sNamesPrefix + '_light": ">>>_LIGHT_<<<", "' + sNamesPrefix + '_lampStatus": ">>>_LAMPSTATUS_<<<" }] }'
+
+config['Payload'] = { 'PayloadTemplate': sPayloadTemplate }
+
+with open( devicePropertiesFileName, 'w' ) as deviceConfigFile :
+        config.write( deviceConfigFile )
+
+
+#config.close()
+# ===
