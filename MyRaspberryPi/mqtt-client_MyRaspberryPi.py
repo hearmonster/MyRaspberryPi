@@ -87,6 +87,8 @@ iLampPort = 5          #D5 (Digital)
 iButtonPort = 4        #D4 (Digital)
 iOverride = 0
 
+grovepi.pinMode( iLampPort, "OUTPUT" )
+
 # ========================================================================
 def setLed( sOnOff_command_argument ):
 	# Note: Takes a STRING (not a BOOL!) as an argument
@@ -203,7 +205,7 @@ client.iSample_Light = 0
 client.sSample_LampStatus = 'OFF'
 
 # Set LED to its initial state
-setLed( 'TRUE' )
+setLed( 'FALSE' )
 #logging.info( 'LED Initial State:: Port: ' + str( iLampPort ) + '\tState: ' + str( client.bLEdState ) + '\n' )
 #grovepi.digitalWrite( iLampPort, client.bLEdState )
 

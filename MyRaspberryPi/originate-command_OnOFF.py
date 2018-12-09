@@ -11,10 +11,19 @@ config_SetLamp_command_capabilityID = '13281258-8e7a-4cff-b062-74995e7f4738'
 config_CommandName = "OnOff"  #(a Property of the Capability")
 config_propFile = 'My_Raspberry_Pi[19]-Device.properties'
 
-# Turn on the Lamp
-config_CommandValue = "True"
+# Turn on the Lamp by default
+import sys                
+sCommandArg = sys.argv[1]
+if sCommandArg.lower() == 'false':
+	sCommandValue = "False"
+else:
+	sCommandValue = "True"
 
 
+
+# Iteration over all arguments:
+for eachArg in sys.argv:   
+        print(eachArg)
 
 import requests
 
@@ -37,7 +46,7 @@ headers={'Content-Type' : 'application/json'}
 print('request_url: ' + request_url)
 #>>>request_url: https://2f7241c1-8671-4591-9de0-8c64ed90e10e.canary.cp.iot.sap/iot/core/api/v1/devices/4/commands
 
-payload='{ "capabilityId" : "' + config_SetLamp_command_capabilityID + '", "sensorId" : "' + sSensorId + '", "command" : { "' + config_CommandName + '" : "' + config_CommandValue +'" } }'
+payload='{ "capabilityId" : "' + config_SetLamp_command_capabilityID + '", "sensorId" : "' + sSensorId + '", "command" : { "' + config_CommandName + '" : "' + sCommandValue +'" } }'
 print('payload: ' + payload)
 #>>>payload: { "capabilityId" : "1c156fc1-be0e-4a5a-bf01-2326eef77e9e", "sensorId" : "7", "command" : { "OnOff" : "true" } }
 
