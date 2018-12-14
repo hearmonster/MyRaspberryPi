@@ -9,32 +9,36 @@ config_logLevel = logging.INFO   #DEBUG, INFO, WARNING
 #logging.basicConfig( filename = 'mqtt-client.log', level=logging.DEBUG )  #DEBUG, INFO, WARNING
 logging.basicConfig( level=config_logLevel )  #DEBUG, INFO, WARNING
 
-#from configparser import ConfigParser
-#parser = ConfigParser()
-#propFile = 'My_Raspberry_Pi[19]-Device.properties'
-#parser.read( propFile )
+from configparser import ConfigParser
+parser = ConfigParser()
+tenantPropFile = '/home/pi/MyRaspberryPi/tenant.properties'
+parser.read( tenantPropFile )
 
 #find_sections = ['device', 'sensor', 'sensorType', 'capability']
 #print( parser.get( propFile, 'deviceId' ) )  
 
-sBrokerUrl  = '2f7241c1-8671-4591-9de0-8c64ed90e10e.canary.cp.iot.sap'		#parser['Landscape']['url'] 
-iBrokerPort = 8883								#int( parser['Landscape']['port'] )
-sLandscapeCertBundleFilename   = './canary_cp_iot_sap_BUNDLE.crt'		#parser['Landscape']['CertBundle']
-sDeviceCredentialsKeyFilename  = 'My_Raspberry_Pi[19]-Device-credentials.key'	#parser['device']['credentialsKey']
-sDeviceCredentialsCertFilename = 'My_Raspberry_Pi[19]-Device-credentials.crt'	#parser['device']['credentialsCert']
-sDeviceAltId = '84dedf1bdb564bd3'
-sDevicePemSecret = '5iE6pZqCBhNAdmmD'
+sBrokerUrl  = parser['Landscape']['url'] 
+iBrokerPort = int( parser['Landscape']['port'] )
+sLandscapeCertBundleFilename   = parser['Landscape']['CertBundle']
 
+
+devicePropFile = 'My-Raspberry-Pi_Device.properties'
+parser.read( devicePropFile )
+sDeviceCredentialsKeyFilename  = parser['device']['credentialsKey']
+sDeviceCredentialsCertFilename = parser['device']['credentialsCert']
+sDeviceAltId = parser['device']['deviceAltId']
+#sDevicePemSecret = '5iE6pZqCBhNAdmmD'
+
+sSensorAltId_DHT   = parser['sensors']['sensorAltId_dht']
+sSensorAltId_Light = parser['sensors']['sensorAltId_light']
 
 
 # DHT Sensor, Capability w/ 2x Properties
-sSensorAltId_DHT 	= 'b1ebcfa471f8c87e'
 sCapabilityAltId_DHT	= 'fb48689a05fdba88'
 sPropertyName_DHTTemp	= 'temperature'
 sPropertyName_DHTHum	= 'humidity'
 
 # Light Sensor, Capability, Property
-sSensorAltId_Light 	= 'abd3f4cc93b7fa50'
 sCapabilityAltId_Light	= '625a5e85958ea7b5'
 sPropertyName_LightInt	= 'LightIntensity'
 
@@ -46,8 +50,10 @@ iSleepTime=3	#Sample Rate (in seconds).  e.g. 1800 => 30 mins between samples
 logging.info( 'Broker URL:\t' + sBrokerUrl )
 logging.info( 'Broker Port:\t ' + str( iBrokerPort ) )
 logging.info( 'Device Alt ID:\t ' + sDeviceAltId )
-#logging.info( 'Sensor Alt ID:\t ' + sSensorAltId )
-#logging.info( 'Capability Alt ID: ' + sCapabilityAltId )
+logging.info( 'Sensor-Light Alt ID:\t ' + sSensorAltId_Light )
+logging.info( '\tCapability-Light Alt ID: ' + sCapabilityAltId_Light )
+logging.info( 'Sensor-DHT Alt ID:\t ' + sSensorAltId_DHT )
+logging.info( '\tCapability-DHT Alt ID: ' + sCapabilityAltId_DHT )
 logging.info( 'Cert Bundle Filename: ' + sLandscapeCertBundleFilename )
 logging.info( 'Cred Key Filename: ' + sDeviceCredentialsKeyFilename )
 logging.info( 'Cred Cert Filename: ' + sDeviceCredentialsCertFilename )
